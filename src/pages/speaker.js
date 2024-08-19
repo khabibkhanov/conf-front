@@ -7,14 +7,17 @@ const Speaker = () => {
   const socketRef = useRef(null);
 
   useEffect(() => {
-    socketRef.current = io('http://localhost:3001');
+    socketRef.current = io('http://192.168.100.41:3001');
+    console.log('Connected to server as speaker');
     socketRef.current.emit('broadcaster');
 
     socketRef.current.on('transcript', (text) => {
+      console.log('Received transcript:', text);
       setTranscript(text);
     });
 
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+    navigator?.mediaDevices?.getUserMedia({ video: true, audio: true }).then(stream => {
+      console.log('Media stream obtained');
       videoRef.current.srcObject = stream;
       videoRef.current.play();
 
@@ -24,6 +27,7 @@ const Speaker = () => {
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
+          console.log('Sending audio for transcription');
           const reader = new FileReader();
           reader.readAsArrayBuffer(event.data);
           reader.onloadend = () => {
@@ -35,12 +39,14 @@ const Speaker = () => {
       mediaRecorder.start(1000);
 
       return () => {
+        console.log('Stopping media stream');
         mediaRecorder.stop();
         stream.getTracks().forEach(track => track.stop());
       };
     });
 
     return () => {
+      console.log('Disconnecting from server');
       socketRef.current.disconnect();
     };
   }, []);
