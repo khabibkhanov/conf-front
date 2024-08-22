@@ -1,21 +1,25 @@
 import { useRouter } from 'next/router';
 
 export default function Home() {
-  const router = useRouter();
+    const router = useRouter();
 
-  const handleRoleSelection = (role) => {
-    if (role === 'speaker') {
-      router.push('/speaker');
-    } else if (role === 'listener') {
-      router.push('/listener');
-    }
-  };
-
-  return (
-    <div>
-      <h1>Conference Translator</h1>
-      <button onClick={() => handleRoleSelection('speaker')}>Speaker</button>
-      <button onClick={() => handleRoleSelection('listener')}>Listener</button>
-    </div>
-  );
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+            <h1>Welcome to the Conference Translator</h1>
+            <div style={{ marginTop: '20px' }}>
+                <button
+                    style={{ padding: '10px 20px', fontSize: '18px', marginRight: '10px' }}
+                    onClick={() => router.push('/speaker')}
+                >
+                    Speaker
+                </button>
+                <button
+                    style={{ padding: '10px 20px', fontSize: '18px', marginLeft: '10px' }}
+                    onClick={() => router.push('/listener')}
+                >
+                    Listener
+                </button>
+            </div>
+        </div>
+    );
 }

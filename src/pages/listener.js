@@ -2,81 +2,56 @@ import { useEffect, useRef, useState } from 'react';
 import io from 'socket.io-client';
 
 const Listener = () => {
-  const videoRef = useRef(null);
-  const [translatedText, setTranslatedText] = useState('');
-  const [language, setLanguage] = useState('en');
-  const socketRef = useRef(null);
+    const [targetLang, setTargetLang] = useState('es');
+    const [translatedTexts, setTranslatedTexts] = useState([]);
+    const audioRef = useRef(null);
+    const socket = useRef(null);
 
-  useEffect(() => {
-    socketRef.current = io('http://192.168.100.41:3001');
-    console.log('Connected to server as listener');
-    socketRef.current.emit('watcher');
+    useEffect(() => {
+        socket.current = io.connect('http://localhost:5000');
 
-    socketRef.current.on('offer', (id, description) => {
-      console.log('Received offer:', description);
-      const peerConnection = new RTCPeerConnection();
-      peerConnection.setRemoteDescription(new RTCSessionDescription(description));
-      peerConnection.createAnswer()
-        .then(sdp => {
-          console.log('Sending answer:', sdp);
-          return peerConnection.setLocalDescription(sdp);
-        })
-        .then(() => socketRef.current.emit('answer', id, peerConnection.localDescription));
+        socket.current.emit('set-listener-lang', targetLang);
 
-      peerConnection.ontrack = (event) => {
-        console.log('Received track:', event.streams[0]);
-        videoRef.current.srcObject = event.streams[0];
-      };
+        socket.current.on('listener-transcription', ({ translatedText }) => {
+            setTranslatedTexts(prev => [...prev, translatedText]);
+        });
 
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          console.log('Sending ICE candidate:', event.candidate);
-          socketRef.current.emit('candidate', id, event.candidate);
-        }
-      };
-    });
+        socket.current.on('translated-speech', (audioData) => {
+            const audioBlob = new Blob([audioData], { type: 'audio/mp3' });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            audioRef.current.src = audioUrl;
+            audioRef.current.play();
+        });
 
-    socketRef.current.on('translatedSpeech', ({ translatedText, audioUrl }) => {
-      console.log('Received translated speech:', translatedText);
-      setTranslatedText(translatedText);
-      const audio = new Audio(audioUrl);
-      audio.play();
-    });
+        return () => {
+            socket.current.disconnect();
+        };
+    }, [targetLang]);
 
-    return () => {
-      console.log('Disconnecting from server');
-      socketRef.current.disconnect();
-    };
-  }, []);
+    return (
+        <div>
+            <h1>Listener Page</h1>
+            <label>
+                Choose your language:
+                <select value={targetLang} onChange={(e) => setTargetLang(e.target.value)}>
+                    <option value="es">Spanish</option>
+                    <option value="fr">French</option>
+                    {/* Add more languages as needed */}
+                </select>
+            </label>
+            
+            <div>
+            <audio ref={audioRef} controls />
 
-  const handleLanguageChange = (e) => {
-    setLanguage(e.target.value);
-    console.log('Language changed to:', e.target.value);
-    socketRef.current.emit('translateSpeech', { text: translatedText, targetLanguage: e.target.value });
-  };
-
-  return (
-    <div>
-      <video ref={videoRef} autoPlay muted />
-      <div>
-        <h3>Translated Transcript:</h3>
-        <p>{translatedText}</p>
-      </div>
-      <div>
-        <label>
-          Choose language:
-          <select value={language} onChange={handleLanguageChange}>
-            <option value="en">English</option>
-            <option value="es">Spanish</option>
-            <option value="fr">French</option>
-            <option value="de">German</option>
-            <option value="ru">Russian</option>
-            <option value="zh">Chinese</option>
-          </select>
-        </label>
-      </div>
-    </div>
-  );
+                <h2>Translated Texts</h2>
+                <ul>
+                    {translatedTexts.map((text, index) => (
+                        <li key={index}>{text}</li>
+                    ))}
+                </ul>
+            </div>
+        </div>
+    );
 };
 
 export default Listener;

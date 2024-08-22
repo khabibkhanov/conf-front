@@ -2,64 +2,80 @@ import { useEffect, useRef, useState } from 'react';
 import io from 'socket.io-client';
 
 const Speaker = () => {
-  const videoRef = useRef(null);
-  const [transcript, setTranscript] = useState('');
-  const socketRef = useRef(null);
+    const [transcripts, setTranscripts] = useState([]);
+    const [isStreaming, setIsStreaming] = useState(false);
+    const socket = useRef(null);
+    const mediaRecorder = useRef(null);
 
-  useEffect(() => {
-    socketRef.current = io('http://192.168.100.41:3001');
-    console.log('Connected to server as speaker');
-    socketRef.current.emit('broadcaster');
+    useEffect(() => {
+        console.log('Connecting to server...');
+        socket.current = io.connect('http://localhost:5000');
 
-    socketRef.current.on('transcript', (text) => {
-      console.log('Received transcript:', text);
-      setTranscript(text);
-    });
+        socket.current.on('speaker-transcription', ({ transcript }) => {
+            console.log(`Received transcript: ${transcript}`);
+            setTranscripts(prev => [...prev, transcript]);
+        });
 
-    navigator?.mediaDevices?.getUserMedia({ video: true, audio: true }).then(stream => {
-      console.log('Media stream obtained');
-      videoRef.current.srcObject = stream;
-      videoRef.current.play();
+        socket.current.on('error', (message) => {
+            console.error(`Error from server: ${message}`);
+        });
 
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const mediaRecorder = new MediaRecorder(stream);
-      const source = audioContext.createMediaStreamSource(stream);
+        return () => {
+            if (mediaRecorder.current) {
+                mediaRecorder.current.stop();
+            }
+            socket.current.disconnect();
+            console.log('Disconnected from server');
+        };
+    }, []);
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          console.log('Sending audio for transcription');
-          const reader = new FileReader();
-          reader.readAsArrayBuffer(event.data);
-          reader.onloadend = () => {
-            socketRef.current.emit('startSpeaking', reader.result);
-          };
-        }
-      };
-
-      mediaRecorder.start(1000);
-
-      return () => {
-        console.log('Stopping media stream');
-        mediaRecorder.stop();
-        stream.getTracks().forEach(track => track.stop());
-      };
-    });
-
-    return () => {
-      console.log('Disconnecting from server');
-      socketRef.current.disconnect();
+    const startStreaming = () => {
+        console.log('Starting stream...');
+        navigator?.mediaDevices?.getUserMedia({ audio: true })
+            .then(stream => {
+                mediaRecorder.current = new MediaRecorder(stream);
+                mediaRecorder.current.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        console.log('Sending audio data');
+                        socket.current.emit('audio-data', event.data);
+                    }
+                };
+                mediaRecorder.current.start(100);
+                setIsStreaming(true);
+            })
+            .catch(error => {
+                console.error('Error accessing audio stream:', error);
+            });
     };
-  }, []);
 
-  return (
-    <div>
-      <video ref={videoRef} autoPlay muted />
-      <div>
-        <h3>Transcript:</h3>
-        <p>{transcript}</p>
-      </div>
-    </div>
-  );
+    const stopStreaming = () => {
+        console.log('Stopping stream...');
+        if (mediaRecorder.current) {
+            mediaRecorder.current.stop();
+        }
+        socket.current.emit('stop-stream');
+        setIsStreaming(false);
+    };
+
+    return (
+        <div style={{ padding: '20px' }}>
+            <h1>Speaker Page</h1>
+            <button
+                onClick={isStreaming ? stopStreaming : startStreaming}
+                style={{ padding: '10px 20px', fontSize: '18px', marginBottom: '20px' }}
+            >
+                {isStreaming ? 'Stop Speaking' : 'Start Speaking'}
+            </button>
+            <div>
+                <h2>Transcripts</h2>
+                <ul>
+                    {transcripts.map((transcript, index) => (
+                        <li key={index}>{transcript}</li>
+                    ))}
+                </ul>
+            </div>
+        </div>
+    );
 };
 
 export default Speaker;
